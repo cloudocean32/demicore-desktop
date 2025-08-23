@@ -1,6 +1,6 @@
 {
   "name": "DEMICORE",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "DEMICORE - Core Insights, Smarter Inside.",
   "author": {
     "name": "DEV168",
@@ -22,7 +22,7 @@
     "electron-log": "^5.1.5",
     "electron-updater": "^6.2.1",
     "papaparse": "^5.4.1",
-    "public-ip": "^4.0.0",
+    "public-ip": "^6.0.2",
     "puppeteer": "^24.16.2",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
@@ -30,9 +30,9 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1",
-    "electron-store": "^8.1.0"
+    "electron": "^31.0.2",
+    "electron-builder": "^24.13.3",
+    "electron-store": "^8.2.0"
   },
   "build": {
     "appId": "com.demicore.desktop",
@@ -41,7 +41,7 @@
     "publish": {
       "provider": "github",
       "owner": "cloudocean32",
-      "repo": ""
+      "repo": "demicore-desktop"
     },
     "files": [
       "main.js",
@@ -50,7 +50,8 @@
       "index.html",
       "access-denied.html",
       "ahrefs-session.json",
-      "build/**/*"
+      "build/**/*",
+      "lang/**/*"
     ],
     "mac": {
       "target": [
