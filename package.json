@@ -1,0 +1,99 @@
+{
+  "name": "DEMICORE",
+  "version": "1.0.0",
+  "description": "DEMICORE - Core Insights, Smarter Inside.",
+  "author": {
+    "name": "DEV168",
+    "email": "data.demigod888@gmail.com"
+  },
+  "main": "main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "publish": "electron-builder --publish always",
+    "build:win": "electron-builder --win --x64",
+    "build:linux": "electron-builder --linux",
+    "build:mac": "electron-builder --mac"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "electron-log": "^5.1.5",
+    "electron-updater": "^6.2.1",
+    "papaparse": "^5.4.1",
+    "public-ip": "^4.0.0",
+    "puppeteer": "^24.16.2",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "undici": "^6.19.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "electron-store": "^8.1.0"
+  },
+  "build": {
+    "appId": "com.demicore.desktop",
+    "productName": "DEMICORE",
+    "copyright": "Copyright © 2025 DEMICORE",
+    "publish": {
+      "provider": "github",
+      "owner": "cloudocean32",
+      "repo": ""
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "access-denied.html",
+      "ahrefs-session.json",
+      "build/**/*"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icns/icon.icns",
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "title": "DEMICORE",
+      "background": null,
+      "iconSize": 100,
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "sign": false
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/ico/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    }
+  }
+}
