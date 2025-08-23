@@ -44,14 +44,20 @@
       "repo": "demicore-desktop"
     },
     "files": [
-      "main.js",
-      "preload.js",
-      "renderer.js",
-      "index.html",
-      "access-denied.html",
-      "ahrefs-session.json",
-      "build/**/*",
-      "lang/**/*"
+      "**/*"
+    ],
+    "asarUnpack": [
+      "**/node_modules/puppeteer/**"
+    ],
+    "extraResources": [
+      {
+        "from": "lang",
+        "to": "lang"
+      },
+      {
+        "from": "build",
+        "to": "build"
+      }
     ],
     "mac": {
       "target": [
