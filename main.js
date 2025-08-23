@@ -8,6 +8,7 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const axios = require('axios');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
+const { executablePath } = require('puppeteer');
 
 puppeteer.use(StealthPlugin());
 
@@ -79,24 +80,42 @@ async function getBrowserPage() {
         throw new Error("Ahrefs credentials are not loaded. Please set them in the settings.");
     }
     if (pageInstance && !pageInstance.isClosed()) return pageInstance;
+
     log.info('Membuka browser Puppeteer...');
-    browserInstance = await puppeteer.launch({ headless: false });
-    pageInstance = await browserInstance.newPage();
-    await pageInstance.setViewport({ width: 1366, height: 768 });
-    if (fs.existsSync(SESSION_FILE_PATH)) {
-        try {
-            const cookiesString = fs.readFileSync(SESSION_FILE_PATH, 'utf8');
-            if (cookiesString) {
-                const cookies = JSON.parse(cookiesString);
-                await pageInstance.setCookie(...cookies);
-                await pageInstance.goto('https://app.ahrefs.com/dashboard', { waitUntil: 'networkidle2' });
-                if (await pageInstance.$('input[placeholder="Domain or URL"]')) {
-                    log.info('Login berhasil menggunakan sesi tersimpan!');
-                    return pageInstance;
-                }
-            }
-        } catch (error) { log.warn('Gagal memuat sesi, login ulang diperlukan.'); }
+    const userDataPath = path.join(app.getPath('userData'), 'puppeteer_user_data');
+    log.info(`Puppeteer user data will be stored in: ${userDataPath}`);
+
+    try {
+        browserInstance = await puppeteer.launch({
+            headless: false,
+            userDataDir: userDataPath,
+            executablePath: executablePath(),
+            args: [
+                '--disable-infobars',
+                '--start-maximized'
+            ]
+        });
+    } catch (error) {
+        log.error('Failed to launch Puppeteer:', error);
+        dialog.showErrorBox('Puppeteer Launch Error', `Could not launch the browser. Please ensure the application has the necessary permissions.\n\nError: ${error.message}`);
+        app.quit();
+        return;
     }
+
+    pageInstance = await browserInstance.newPage();
+    await pageInstance.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
+    await pageInstance.setViewport({ width: 1366, height: 768 });
+
+    try {
+        await pageInstance.goto('https://app.ahrefs.com/dashboard', { waitUntil: 'networkidle2', timeout: 20000 });
+        if (await pageInstance.$('input[placeholder="Domain or URL"]')) {
+            log.info('Login berhasil menggunakan sesi tersimpan dari userDataDir!');
+            return pageInstance;
+        }
+    } catch (e) {
+        log.warn('Gagal memuat dashboard, mungkin perlu login ulang.');
+    }
+    
     log.info('Mencoba login baru ke Ahrefs...');
     await pageInstance.goto('https://app.ahrefs.com/user/login', { waitUntil: 'networkidle2' });
     await pageInstance.type('input[name="email"]', ahrefsCredentials.email, { delay: 150 });
@@ -104,24 +123,38 @@ async function getBrowserPage() {
     await pageInstance.click('button[type="submit"]');
     await pageInstance.waitForSelector('input[placeholder="Domain or URL"]', { timeout: 60000 });
     log.info('Dashboard Ahrefs terdeteksi, login berhasil!');
-    const cookies = await pageInstance.cookies();
-    fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(cookies, null, 2));
-    log.info('Sesi cookies berhasil disimpan.');
+
     return pageInstance;
 }
+
 
 // --- PENGATURAN JENDELA APLIKASI ---
 function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 1400, height: 900,
+    title: 'DEMICORE',
+    width: 1400,
+    height: 900,
+    minWidth: 1000,
+    minHeight: 700,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true, nodeIntegration: false,
-    },
+      devTools: !app.isPackaged,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    }
   });
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+
+  if (app.isPackaged) {
+    mainWindow.setMenu(null);
+  }
+
+  mainWindow.loadFile('index.html');
+  mainWindow.on('closed', () => (mainWindow = null));
   mainWindow.once('ready-to-show', () => {
-    autoUpdater.checkForUpdatesAndNotify();
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdates();
+    }
   });
 }
 
@@ -130,6 +163,7 @@ function createAccessDeniedWindow() {
         width: 500, height: 400, frame: false, resizable: false,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
+            devTools: !app.isPackaged,
             contextIsolation: true, nodeIntegration: false,
         }
     });
@@ -139,24 +173,41 @@ function createAccessDeniedWindow() {
 async function initializeApp() {
     log.info('App starting...');
 
-    if (fs.existsSync(CREDENTIALS_FILE_PATH)) {
-        try {
+    try {
+        if (fs.existsSync(CREDENTIALS_FILE_PATH)) {
             const encryptedData = fs.readFileSync(CREDENTIALS_FILE_PATH);
             if (encryptedData.length > 0) {
                 const decryptedData = safeStorage.decryptString(encryptedData);
                 ahrefsCredentials = JSON.parse(decryptedData);
                 log.info('Ahrefs credentials loaded and decrypted successfully.');
             }
-        } catch (error) {
-            log.error('Failed to load/decrypt credentials. They will need to be re-entered.', error);
-            ahrefsCredentials = null;
         }
+    } catch (error) {
+        log.error('Failed to load/decrypt credentials.', error);
+        dialog.showErrorBox(
+            "Credential Error",
+            `Failed to access secure credentials. You might need to re-enter them.\n\nError: ${error.message}`
+        );
+        ahrefsCredentials = null;
     }
     
     try {
         const { publicIpv4 } = await import('public-ip');
-        currentUserPublicIP = await publicIpv4();
-        log.info(`Current Public IP: ${currentUserPublicIP}`);
+        
+        try {
+            currentUserPublicIP = await publicIpv4({ timeout: 3000 });
+            log.info(`Current Public IP (via public-ip): ${currentUserPublicIP}`);
+        } catch (error) {
+            log.warn(`public-ip failed: ${error.message}. Trying fallback with axios...`);
+            const response = await axios.get('https://api.ipify.org?format=json', { timeout: 3000 });
+            currentUserPublicIP = response.data.ip;
+            log.info(`Current Public IP (via axios fallback): ${currentUserPublicIP}`);
+        }
+
+        if (!currentUserPublicIP) {
+            throw new Error("Failed to get Public IP from all sources.");
+        }
+
         const whitelistResponse = await fetch('https://whitelistips.vercel.app/ips');
         const whitelistData = await whitelistResponse.json();
         const allowedIps = whitelistData.ips;
@@ -170,7 +221,8 @@ async function initializeApp() {
         }
     } catch (error) {
         log.error('Failed to verify IP address:', error);
-        createAccessDeniedWindow();
+        dialog.showErrorBox("Network Error", `Could not determine your Public IP address. Please check your internet connection and firewall settings, then restart the application.\n\nError: ${error.message}`);
+        app.quit();
     }
 }
 
@@ -297,11 +349,16 @@ ipcMain.handle('csv:parseFile', (event, filePath) => {
 });
 ipcMain.handle('i18n:getTranslations', async (event, lang) => {
     try {
-        const filePath = path.join(__dirname, 'lang', `${lang}.json`);
+        const isPackaged = app.isPackaged;
+        const basePath = isPackaged ? process.resourcesPath : __dirname;
+        const filePath = path.join(basePath, 'lang', `${lang}.json`);
+        
+        log.info(`Attempting to load translation from: ${filePath}`);
+
         const fileContent = fs.readFileSync(filePath, 'utf8');
         return JSON.parse(fileContent);
     } catch (error) {
-        log.error(`Failed to load translations for language "${lang}":`, error);
+        log.error(`FATAL: Failed to load translation for language "${lang}":`, error);
         return {};
     }
 });
@@ -381,6 +438,9 @@ ipcMain.handle('ahrefs:checkDomain', async (event, domainName, forceRecheck = fa
     }
     try {
         const page = await getBrowserPage();
+        if (!page) { // Tambahan: Cek jika page gagal dibuat
+            throw new Error("Puppeteer page instance could not be created.");
+        }
         sendLog('info', `[Ahrefs] Membuka halaman Overview 2.0 untuk ${domainName}...`);
         await page.goto(`https://app.ahrefs.com/v2-site-explorer/overview?target=${domainName}`, { waitUntil: 'networkidle2', timeout: 90000 });
         let dofollowData = {};
